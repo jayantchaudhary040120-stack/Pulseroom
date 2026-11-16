@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PulseRoom — Real-Time Chat & File Sharing</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Official Supabase JS v2 Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Custom scrollbar and subtle animations */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.55);
+    }
+
+    @keyframes msgPop {
+      0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.99);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .animate-msg {
+      animation: msgPop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.92); }
+    }
+    .pulse-dot {
+      animation: pulseDot 2s infinite ease-in-out;
+    }
+
+    /* PulseRoom finishing layer: visual-only enhancements */
+    :root { color-scheme: light; }
+    html, body { min-height: 100%; }
+    body { min-height: 100dvh; }
+    button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
+    button { touch-action: manipulation; }
+    button:not(:disabled) { transition: transform .16s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease; }
+    button:not(:disabled):active { transform: translateY(1px) scale(.985); }
+    :focus-visible { outline: 3px solid rgba(99,102,241,.35); outline-offset: 2px; }
+    #welcomeScreen { background-image: radial-gradient(ellipse at 15% 10%, rgba(129,140,248,.13), transparent 38%), radial-gradient(ellipse at 90% 85%, rgba(99,102,241,.10), transparent 34%), linear-gradient(135deg,#f8fafc,#fff 48%,#eef2ff); }
+    #welcomeScreen > .my-auto > div { border-color: rgba(226,232,240,.9); box-shadow: 0 28px 80px -36px rgba(30,41,59,.28), 0 8px 24px -16px rgba(79,70,229,.18); animation: cardEnter .55s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes cardEnter { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:translateY(0) scale(1) } }
+    #codeNumpad button { min-height:48px; border-radius:15px; background:linear-gradient(180deg,#fff,#f8fafc); box-shadow:0 2px 5px rgba(15,23,42,.04); font-variant-numeric:tabular-nums; }
+    #codeNumpad button:hover { border-color:#c7d2fe; background:#eef2ff; color:#4338ca; box-shadow:0 5px 14px rgba(79,70,229,.10); }
+    #nameEntryForm > button[type=submit] { min-height:52px; border-radius:16px; background:linear-gradient(110deg,#4f46e5,#6366f1 55%,#7c3aed); box-shadow:0 12px 24px -12px rgba(79,70,229,.65); }
+    #nameEntryForm > button[type=submit]:disabled { opacity:.78; cursor:wait; transform:none; }
+    #chatScreen { min-height:0; height:100dvh; background:linear-gradient(180deg,#f8fafc,#f1f5f9); }
+    #chatScreen > header, #chatScreen > footer { background:rgba(255,255,255,.94); backdrop-filter:blur(16px); }
+    #messagesContainer { overscroll-behavior:contain; scroll-behavior:smooth; padding-bottom:max(1.25rem, env(safe-area-inset-bottom)); }
+    #messagesList { width:100%; }
+    #chatForm textarea { min-height:46px; }
+    #chatForm button { min-height:46px; }
+    .message-delete-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; margin-left:2px; border:1px solid #fee2e2; border-radius:10px; color:#e11d48; background:#fff1f2; }
+    .message-delete-btn:hover { color:#be123c; background:#ffe4e6; border-color:#fecdd3; box-shadow:0 4px 12px rgba(225,29,72,.12); }
+    .message-delete-btn svg { width:14px; height:14px; }
+    #toastContainer > * { animation:toastIn .22s ease-out both; }
+    @keyframes toastIn { from { opacity:0; transform:translateY(-7px) } to { opacity:1; transform:translateY(0) } }
+    .login-spinner { width:17px; height:17px; border:2px solid rgba(255,255,255,.38); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg) } }
+    @media (max-width: 640px) {
+      body { overflow:hidden; }
+      #welcomeScreen { padding: max(12px,env(safe-area-inset-top)) 14px max(12px,env(safe-area-inset-bottom)); }
+      #welcomeScreen > .my-auto > div { padding:20px; border-radius:24px; }
+      #welcomeScreen h1 { font-size:1.55rem; line-height:1.2; }
+      #codeNumpad { gap:8px; }
+      #codeNumpad button { min-height:46px; padding-top:10px; padding-bottom:10px; }
+      #chatScreen > header { padding-left:12px; padding-right:12px; }
+      #chatScreen > header .max-w-5xl { gap:8px; }
+      #chatScreen > header h2 { max-width:125px; font-size:14px; }
+      #realtimeBadge { display:none; }
+      #messagesContainer { padding:14px 10px; }
+      #messagesList { gap:12px; }
+      #chatScreen > footer { padding:10px 10px max(10px,env(safe-area-inset-bottom)); }
+      #chatForm { gap:7px; }
+      #chatForm textarea { padding:11px 12px; font-size:16px; }
+      #attachFileBtn, #sendMessageBtn { padding:11px; border-radius:14px; }
+      #sendMessageBtn { min-width:46px; justify-content:center; }
+      #scrollToBottomBtn { right:14px; bottom:90px; }
+      #toastContainer { top:max(10px,env(safe-area-inset-top)); right:0; padding-left:12px; padding-right:12px; }
+    }
+    @media (max-height: 700px) and (max-width: 640px) {
+      #welcomeScreen > .my-auto > div { padding:16px 18px; }
+      #welcomeScreen .w-14.h-14 { width:44px; height:44px; margin-bottom:12px; }
+      #nameEntryForm { margin-top:14px; }
+      #nameEntryForm > div:first-child { margin-bottom:10px; }
+      #codeNumpad button { min-height:39px; padding-top:6px; padding-bottom:6px; }
+      #welcomeScreen .mt-6.pt-5 { margin-top:14px; padding-top:12px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; } }
+
+  </style>
+</head>
+
+<body class="h-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white overflow-hidden flex flex-col">
+
+  <!-- =====================================================================
+       TOAST NOTIFICATION CONTAINER (Replaces alert/confirm)
+       ===================================================================== -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- =====================================================================
+       IMAGE LIGHTBOX MODAL
+       ===================================================================== -->
+  <div id="lightboxModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <button id="closeLightboxBtn" class="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition" title="Close preview">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <div class="max-w-5xl max-h-[90vh] flex flex-col items-center gap-3">
+      <img id="lightboxImg" src="" alt="Preview" class="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10" />
+      <div class="flex items-center gap-3">
+        <span id="lightboxCaption" class="text-sm text-slate-200 font-medium truncate max-w-xs sm:max-w-md"></span>
+        <a id="lightboxDownloadBtn" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+          </svg>
+          Download Original
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       SCREEN 1: WELCOME / NAME ENTRY SCREEN
+       ===================================================================== -->
+  <main id="welcomeScreen" class="flex-1 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-indigo-50/60">
+    <!-- Top bar -->
+    <div class="max-w-5xl w-full mx-auto flex items-center justify-between py-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+          </svg>
+        </div>
+        <span class="font-bold text-lg tracking-tight text-slate-900">PulseRoom</span>
+      </div>
+
+      <!-- Three-Dots Creator Credit Button (Welcome Screen Only) -->
+      <button
+        id="openCreditsBtn"
+        type="button"
+        title="About & Creator Credits"
+        aria-label="About & Creator Credits"
+        class="p-2.5 rounded-xl bg-white/80 hover:bg-white border border-slate-200/80 text-slate-600 hover:text-indigo-600 shadow-xs hover:shadow-md transition flex items-center justify-center active:scale-95"
+      >
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="2"/>
+          <circle cx="12" cy="12" r="2"/>
+          <circle cx="12" cy="19" r="2"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Creator Credits Modal (Accessible from Welcome Screen) -->
+    <div
+      id="creditsModal"
+      class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+    >
+      <div class="bg-white rounded-3xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 sm:p-8 relative animate-msg">
+        <!-- Close X Button -->
+        <button
+          id="closeCreditsIconBtn"
+          type="button"
+          title="Close"
+          class="absolute top-5 right-5 p-2 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-500 hover:text-slate-800 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-700 text-[11px] font-semibold uppercase tracking-wider mb-4">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+          <span>Crafted &amp; Engineered By</span>
+        </div>
+
+        <!-- Creator Name & Avatar -->
+        <div class="flex items-center gap-3.5 mb-4">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-600/25 shrink-0">
+            JC
+          </div>
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Jayant Chaudhary
+            </h2>
+            <p class="text-xs font-medium text-indigo-600">
+              Creator &amp; Lead Full-Stack Architect
+            </p>
+          </div>
+        </div>
+
+        <!-- Descriptive Credit Paragraph -->
+        <p class="text-sm text-slate-600 leading-relaxed">
+          <strong>PulseRoom</strong> was designed, architected, and built by <strong class="text-slate-900">Jayant Chaudhary</strong> as a private friends-only communication and media-sharing space with individual access codes, saved chat history, and multi-format file sharing.
+        </p>
+
+        <!-- Highlights Grid -->
+        <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2.5 text-xs text-slate-600">
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+            <span class="font-semibold text-slate-900 block">Personal Access Codes</span>
+            <span>Named friend access</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+            <span class="font-semibold text-slate-900 block">Live WebSockets</span>
+            <span>Real-time sync &amp; media</span>
+          </div>
+        </div>
+
+        <!-- Dismiss Button -->
+        <button
+          id="closeCreditsBtn"
+          type="button"
+          class="mt-6 w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-semibold text-sm shadow-md transition"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Welcome Card -->
+    <div class="my-auto max-w-md w-full mx-auto">
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-900/5 p-6 sm:p-8">
+        <!-- Logo Icon -->
+        <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/25 mb-6">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+          </svg>
+        </div>
+
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+          Welcome to PulseRoom
+        </h1>
+        <p class="mt-2 text-sm sm:text-base text-slate-600 leading-relaxed">
+          Enter your personal access code to join your friends in the private PulseRoom chat.
+        </p>
+        <form id="nameEntryForm" class="mt-6 space-y-4">
+          <div>
+            <label for="senderNameInput" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Enter your access code</label>
+            <input id="senderNameInput" type="password" maxlength="4" required readonly inputmode="none" autocomplete="off" placeholder="••••" aria-label="Access code" class="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-slate-50/50 text-center tracking-[0.45em] text-slate-900 placeholder-slate-400 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-600 transition" />
+          </div>
+          <div id="codeNumpad" class="grid grid-cols-3 gap-2.5 select-none">
+            <button type="button" data-key="1" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">1</button>
+            <button type="button" data-key="2" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">2</button>
+            <button type="button" data-key="3" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">3</button>
+            <button type="button" data-key="4" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">4</button>
+            <button type="button" data-key="5" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">5</button>
+            <button type="button" data-key="6" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">6</button>
+            <button type="button" data-key="7" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">7</button>
+            <button type="button" data-key="8" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">8</button>
+            <button type="button" data-key="9" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">9</button>
+            <button type="button" data-key="clear" class="py-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-600 text-xs font-semibold">Clear</button>
+            <button type="button" data-key="0" class="py-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-lg font-semibold">0</button>
+            <button type="button" data-key="back" class="py-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-600 text-xs font-semibold">⌫</button>
+          </div>
+          <button id="loginSubmitBtn" type="submit" class="w-full py-3.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold text-base shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2" aria-live="polite">
+            <span id="loginButtonLabel">Unlock Chat</span>
+            <span id="loginButtonSpinner" class="login-spinner hidden" aria-hidden="true"></span>
+            <svg id="loginButtonArrow" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+          </button>
+        </form>
+
+        <!-- Supported Formats Footer Pill -->
+        <div class="mt-6 pt-5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <span>Supports Images, Audio, Video, PDF, Office &amp; ZIP</span>
+          <span class="font-mono text-[11px] text-slate-400">Supabase Realtime</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom footer -->
+    <div class="max-w-5xl w-full mx-auto text-center text-xs text-slate-400 py-2">
+      Powered by Supabase PostgreSQL, Realtime &amp; Storage &bull; Access-code protected friends chat
+    </div>
+  </main>
+
+  <!-- =====================================================================
+       SCREEN 2: MAIN REAL-TIME CHAT & FILE SHARING INTERFACE
+       ===================================================================== -->
+  <div id="chatScreen" class="hidden flex-1 flex flex-col h-full overflow-hidden bg-slate-100/70">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 shrink-0 z-20">
+      <div class="max-w-5xl mx-auto flex items-center justify-between gap-3">
+        <!-- Brand & Live Status -->
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h2 class="font-bold text-slate-900 text-base truncate">PulseRoom Private</h2>
+              <span id="realtimeBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span id="realtimeDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot"></span>
+                <span id="realtimeStatusText">Live</span>
+              </span>
+              <button id="onlineUsersBtn" type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" aria-expanded="false">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span><span id="onlineCount">0 online</span>
+              </button>
+            </div>
+            <p class="text-xs text-slate-500 truncate">
+               Real-time messages &amp; shared files
+            </p>
+          </div>
+        </div>
+
+        <!-- Right Controls: Current User, Refresh, Supabase Setup, Change Name -->
+        <div class="flex items-center gap-2 shrink-0">
+          <!-- Current User Pill -->
+          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-medium">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            <span>Chatting as <strong id="currentUserBadge" class="font-semibold text-slate-900"></strong></span>
+          </div>
+
+          <!-- Refresh History Button -->
+          <button id="refreshMessagesBtn" type="button" title="Reload Messages" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+
+          <!-- Change Name / Leave Button -->
+          <button id="changeNameBtn" type="button" title="Log Out" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-xs font-medium text-slate-700 transition">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            <span id="mobileNameLabel" class="max-w-[90px] truncate sm:hidden"></span>
+            <span class="hidden sm:inline">Log Out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+    <div id="onlineUsersPanel" class="hidden absolute right-3 sm:right-6 top-[68px] z-30 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl p-3">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Friends online</p>
+      <div id="onlineUsersList" class="space-y-2 text-sm text-slate-700"></div>
+    </div>
+
+    <!-- Drag & Drop Overlay -->
+    <div id="dropZoneOverlay" class="fixed inset-0 z-40 hidden bg-indigo-950/60 backdrop-blur-xs flex items-center justify-center p-6 pointer-events-none">
+      <div class="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border-2 border-dashed border-indigo-500">
+        <div class="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900">Drop file to attach</h3>
+        <p class="text-xs text-slate-500 mt-1">Images, Audio, Video, PDF, Word, Excel, PowerPoint, ZIP, TXT, CSV</p>
+      </div>
+    </div>
+
+    <!-- Message Feed Area -->
+    <div id="messagesContainer" class="flex-1 overflow-y-auto px-3 sm:px-6 py-5">
+      <div class="max-w-4xl mx-auto flex flex-col gap-3.5" id="messagesList">
+        <!-- Populated dynamically from Supabase -->
+      </div>
+    </div>
+
+    <!-- Scroll to bottom floating button -->
+    <button id="scrollToBottomBtn" type="button" class="hidden fixed bottom-24 right-6 z-30 p-2.5 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+      </svg>
+    </button>
+
+    <!-- Bottom Composer Area -->
+    <footer class="bg-white border-t border-slate-200/80 px-3 sm:px-6 py-3 shrink-0 z-20">
+      <div class="max-w-4xl mx-auto">
+
+        <!-- Selected File Attachment Preview Card (Before Sending) -->
+        <div id="selectedFilePreview" class="hidden mb-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div id="selectedFileThumb" class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 overflow-hidden font-bold text-xs">
+              FILE
+            </div>
+            <div class="min-w-0">
+              <p id="selectedFileName" class="text-xs sm:text-sm font-semibold text-slate-800 truncate"></p>
+              <p id="selectedFileSize" class="text-[11px] text-slate-500 font-mono"></p>
+            </div>
+          </div>
+          <button id="clearFileBtn" type="button" class="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-rose-600 transition shrink-0" title="Remove attached file">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Upload Progress Bar -->
+        <div id="uploadProgressWrapper" class="hidden mb-3">
+          <div class="flex items-center justify-between text-xs font-medium text-indigo-700 mb-1">
+            <span id="uploadProgressLabel">Uploading file to Supabase Storage...</span>
+            <span id="uploadProgressPercent" class="font-mono">0%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="uploadProgressBar" class="h-full bg-indigo-600 rounded-full transition-all duration-200" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Message Input Form -->
+        <form id="chatForm" class="flex items-end gap-2">
+          <!-- Hidden File Input supporting requested formats -->
+          <input
+            id="fileInput"
+            type="file"
+            class="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.ogg,.mp4,.mov,.webm,.zip,.rar,.7z,.tar,.gz,.txt,.csv,image/*,audio/*,video/*"
+          />
+
+          <!-- Attachment Button -->
+          <button
+            id="attachFileBtn"
+            type="button"
+            title="Attach file (PDF, Office, Images, Audio, Video, ZIP, TXT)"
+            class="p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 text-slate-600 hover:text-indigo-600 transition shrink-0"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+          </button>
+
+          <!-- Auto-expanding Textarea -->
+          <div class="flex-1 relative">
+            <textarea
+              id="messageInput"
+              rows="1"
+              maxlength="4000"
+              placeholder="Write a message or attach a file... (Enter to send, Shift+Enter for new line)"
+              class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/70 focus:bg-white text-slate-900 placeholder-slate-400 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-600 resize-none max-h-36 leading-snug transition block"
+            ></textarea>
+          </div>
+
+          <!-- Send Button -->
+          <button
+            id="sendMessageBtn"
+            type="submit"
+            class="px-4 sm:px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none text-white font-semibold text-sm shadow-md shadow-indigo-600/20 transition flex items-center gap-2 shrink-0"
+          >
+            <span class="hidden sm:inline">Send</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </footer>
+  </div>
+
+  <!-- =====================================================================
+       APPLICATION JAVASCRIPT (Pure JS + Supabase v2 Client)
+       ===================================================================== -->
+  <script>
+    /*************************************************************************
+     * 1. HARDCODED SUPABASE CONFIGURATION
+     *************************************************************************/
+    const SUPABASE_URL = 'https://kxsqzcbgfozcwvrjmhty.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_1Ani-W1J38TaRMjVBFD3iQ_8svvN1Sv';
+    const STORAGE_BUCKET = 'chat-files';
+    const GATEWAY_URL = `${SUPABASE_URL}/functions/v1/pulseroom-gateway`;
+    const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB max per file
+
+    // Application State
+    let supabaseClient = null;
+    let realtimeChannel = null;
+    let currentUserName = sessionStorage.getItem('pulseroom_username') || '';
+    let currentUserIsAdmin = sessionStorage.getItem('pulseroom_is_admin') === 'true';
+    let chatSessionToken = sessionStorage.getItem('pulseroom_session') || '';
+    let presenceTimer = null;
+    let historyTimer = null;
+    let historyLoaded = false;
+    let selectedFile = null;
+    let renderedMessageIds = new Set();
+    let isUploadingOrSending = false;
+
+    // DOM Elements
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const chatScreen = document.getElementById('chatScreen');
+    const nameEntryForm = document.getElementById('nameEntryForm');
+    const senderNameInput = document.getElementById('senderNameInput');
+    const currentUserBadge = document.getElementById('currentUserBadge');
+    const mobileNameLabel = document.getElementById('mobileNameLabel');
+    const changeNameBtn = document.getElementById('changeNameBtn');
+    const codeNumpad = document.getElementById('codeNumpad');
+    const onlineUsersBtn = document.getElementById('onlineUsersBtn');
+    const onlineUsersPanel = document.getElementById('onlineUsersPanel');
+    const onlineUsersList = document.getElementById('onlineUsersList');
+    const onlineCount = document.getElementById('onlineCount');
+
+    const realtimeBadge = document.getElementById('realtimeBadge');
+    const realtimeDot = document.getElementById('realtimeDot');
+    const realtimeStatusText = document.getElementById('realtimeStatusText');
+    const refreshMessagesBtn = document.getElementById('refreshMessagesBtn');
+
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messagesList = document.getElementById('messagesList');
+    const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
+
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    const fileInput = document.getElementById('fileInput');
+    const attachFileBtn = document.getElementById('attachFileBtn');
+    const sendMessageBtn = document.getElementById('sendMessageBtn');
+
+    const selectedFilePreview = document.getElementById('selectedFilePreview');
+    const selectedFileThumb = document.getElementById('selectedFileThumb');
+    const selectedFileName = document.getElementById('selectedFileName');
+    const selectedFileSize = document.getElementById('selectedFileSize');
+    const clearFileBtn = document.getElementById('clearFileBtn');
+
+    const uploadProgressWrapper = document.getElementById('uploadProgressWrapper');
+    const uploadProgressLabel = document.getElementById('uploadProgressLabel');
+    const uploadProgressPercent = document.getElementById('uploadProgressPercent');
+    const uploadProgressBar = document.getElementById('uploadProgressBar');
+
+    const dropZoneOverlay = document.getElementById('dropZoneOverlay');
+    const lightboxModal = document.getElementById('lightboxModal');
+    const lightboxImg = document.getElementById('lightboxImg');
+    const lightboxCaption = document.getElementById('lightboxCaption');
+    const lightboxDownloadBtn = document.getElementById('lightboxDownloadBtn');
+    const closeLightboxBtn = document.getElementById('closeLightboxBtn');
+
+    // Creator Credits Modal Elements (Welcome Screen Only)
+    const openCreditsBtn = document.getElementById('openCreditsBtn');
+    const creditsModal = document.getElementById('creditsModal');
+    const closeCreditsIconBtn = document.getElementById('closeCreditsIconBtn');
+    const closeCreditsBtn = document.getElementById('closeCreditsBtn');
+
+    /*************************************************************************
+     * 2. UTILITY FUNCTIONS
+     *************************************************************************/
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colorClasses = {
+        success: 'bg-emerald-900 text-white border-emerald-700',
+        error: 'bg-rose-900 text-white border-rose-700',
+        warning: 'bg-amber-900 text-white border-amber-700',
+        info: 'bg-slate-900 text-white border-slate-700'
+      };
+      toast.className = `pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border shadow-xl text-xs font-medium transition-all duration-300 ${colorClasses[type] || colorClasses.info}`;
+
+      const span = document.createElement('span');
+      span.textContent = message;
+      toast.appendChild(span);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '&times;';
+      closeBtn.className = 'text-base leading-none opacity-75 hover:opacity-100';
+      closeBtn.onclick = () => toast.remove();
+      toast.appendChild(closeBtn);
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+      }, 4500);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === null || bytes === undefined || isNaN(bytes)) return '';
+      const num = Number(bytes);
+      if (num === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(num) / Math.log(k));
+      return parseFloat((num / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function formatTimestamp(isoString) {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return '';
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (isToday) return timeStr;
+      const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return `${dateStr}, ${timeStr}`;
+    }
+
+    function getAvatarColor(name) {
+      const colors = [
+        'bg-indigo-600', 'bg-emerald-600', 'bg-rose-600',
+        'bg-amber-600', 'bg-cyan-600', 'bg-violet-600',
+        'bg-blue-600', 'bg-teal-600'
+      ];
+      let hash = 0;
+      const str = String(name || 'User');
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    }
+
+    function getInitials(name) {
+      const parts = String(name || 'U').trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return String(name || 'U').slice(0, 2).toUpperCase();
+    }
+
+    function detectFileCategory(fileName = '', mimeType = '') {
+      const ext = (fileName.split('.').pop() || '').toLowerCase();
+      const mime = (mimeType || '').toLowerCase();
+
+      if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+        return 'image';
+      }
+      if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext)) {
+        return 'audio';
+      }
+      if (mime.startsWith('video/') || ['mp4', 'mov', 'webm', 'm4v'].includes(ext)) {
+        return 'video';
+      }
+      if (ext === 'pdf' || mime === 'application/pdf') {
+        return 'pdf';
+      }
+      if (['doc', 'docx'].includes(ext) || mime.includes('word')) {
+        return 'word';
+      }
+      if (['xls', 'xlsx', 'csv'].includes(ext) || mime.includes('spreadsheet') || mime.includes('excel')) {
+        return 'spreadsheet';
+      }
+      if (['ppt', 'pptx'].includes(ext) || mime.includes('presentation') || mime.includes('powerpoint')) {
+        return 'presentation';
+      }
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('compressed')) {
+        return 'archive';
+      }
+      return 'document';
+    }
+
+    function getFileBadgeMeta(category, fileName = '') {
+      const ext = (fileName.split('.').pop() || 'FILE').toUpperCase().slice(0, 5);
+      switch (category) {
+        case 'pdf':
+          return { label: 'PDF', bg: 'bg-rose-100 text-rose-700 border-rose-200' };
+        case 'word':
+          return { label: ext || 'DOC', bg: 'bg-blue-100 text-blue-700 border-blue-200' };
+        case 'spreadsheet':
+          return { label: ext || 'XLS', bg: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+        case 'presentation':
+          return { label: ext || 'PPT', bg: 'bg-amber-100 text-amber-700 border-amber-200' };
+        case 'archive':
+          return { label: ext || 'ZIP', bg: 'bg-purple-100 text-purple-700 border-purple-200' };
+        default:
+          return { label: ext || 'FILE', bg: 'bg-slate-200 text-slate-700 border-slate-300' };
+      }
+    }
+
+    /*************************************************************************
+     * 3. SUPABASE INITIALIZATION & CONNECTION
+     *************************************************************************/
+    function updateConnectionUI(state, detailText) {
+      if (state === 'connected') {
+        realtimeBadge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200';
+        realtimeDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot';
+        realtimeStatusText.textContent = detailText || 'Live';
+      } else if (state === 'error') {
+        realtimeBadge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200';
+        realtimeDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+        realtimeStatusText.textContent = detailText || 'Offline';
+      } else {
+        realtimeBadge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200';
+        realtimeDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
+        realtimeStatusText.textContent = detailText || 'Connecting...';
+      }
+    }
+
+    async function initSupabaseClient() {
+      try {
+        if (realtimeChannel && supabaseClient) {
+          await supabaseClient.removeChannel(realtimeChannel);
+          realtimeChannel = null;
+        }
+
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+          auth: { persistSession: false }
+        });
+
+        updateConnectionUI('connected', 'Live');
+
+        // Protected message history is synchronized through the authenticated gateway. 
+        return true;
+      } catch (err) {
+        console.error('Supabase initialization error:', err);
+        updateConnectionUI('error', 'Connection Error');
+        renderEmptyState('error', err.message);
+        return false;
+      }
+    }
+
+    async function gatewayRequest(action, payload = {}) {
+      const headers = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY };
+      if (chatSessionToken) headers['x-chat-session'] = chatSessionToken;
+      const response = await fetch(GATEWAY_URL, { method: 'POST', headers, body: JSON.stringify({ action, ...payload }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Request failed.');
+      return result;
+    }
+
+    async function refreshPresence() {
+      if (!chatSessionToken) return;
+      try {
+        const result = await gatewayRequest('heartbeat');
+        onlineCount.textContent = `${result.count} online`;
+        onlineUsersList.innerHTML = '';
+        if (!result.users.length) {
+          const empty = document.createElement('p');
+          empty.className = 'text-xs text-slate-400';
+          empty.textContent = 'No friends online';
+          onlineUsersList.appendChild(empty);
+        } else {
+          result.users.forEach(name => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center gap-2';
+            const dot = document.createElement('span');
+            dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            const label = document.createElement('span');
+            label.textContent = name;
+            item.append(dot, label);
+            onlineUsersList.appendChild(item);
+          });
+        }
+      } catch (err) {
+        if (err.message.includes('Session expired')) {
+          chatSessionToken = '';
+          sessionStorage.clear();
+          await returnToWelcomeScreen();
+          showToast('Your session expired. Please enter your code again.', 'warning');
+        }
+      }
+    }
+
+    /*************************************************************************
+     * 4. REAL-TIME MESSAGING (Load History & Subscribe to INSERTs)
+     *************************************************************************/
+    function renderEmptyState(reason, errorMessage = '') {
+      messagesList.innerHTML = '';
+      renderedMessageIds.clear();
+
+      const card = document.createElement('div');
+      card.id = 'emptyStateCard';
+      card.className = 'my-12 max-w-lg mx-auto bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 text-center shadow-sm';
+
+      if (reason === 'error') {
+        card.innerHTML = `
+          <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <h3 class="font-bold text-slate-900 text-base">Unable to load messages</h3>
+          <p class="text-xs text-slate-500 mt-1">${escapeHtml(errorMessage || 'Please check your internet connection and try refreshing.')}</p>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+          </div>
+          <h3 class="font-bold text-slate-900 text-base">No messages yet</h3>
+          <p class="text-xs text-slate-500 mt-1">Be the first to say hello or share a file in PulseRoom!</p>
+        `;
+      }
+      messagesList.appendChild(card);
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    async function loadMessagesHistory() {
+      if (!supabaseClient || !chatSessionToken) return;
+      try {
+        const result = await gatewayRequest('history');
+        const data = result.messages || [];
+        const incomingIds = new Set(data.map(msg => msg.id));
+        if (!historyLoaded) {
+          messagesList.innerHTML = '';
+          renderedMessageIds.clear();
+          historyLoaded = true;
+        }
+        if (!data.length && renderedMessageIds.size === 0) {
+          renderEmptyState('empty');
+          return;
+        }
+        const emptyCard = document.getElementById('emptyStateCard');
+        if (emptyCard) emptyCard.remove();
+        data.forEach(msg => appendMessageToDOM(msg, false));
+        [...renderedMessageIds].forEach(id => {
+          if (!incomingIds.has(id)) {
+            const row = messagesList.querySelector(`[data-message-id="${id}"]`);
+            if (row) row.remove();
+            renderedMessageIds.delete(id);
+          }
+        });
+      } catch (err) {
+        console.error('Error loading messages:', err);
+        if (!historyLoaded) renderEmptyState('error', err.message);
+      }
+    }
+
+    function subscribeToRealtimeMessages() {
+      if (!supabaseClient) return;
+
+      if (realtimeChannel) {
+        supabaseClient.removeChannel(realtimeChannel);
+      }
+
+      realtimeChannel = supabaseClient
+        .channel('public:messages:feed')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          (payload) => {
+            if (currentUserName && payload && payload.new) appendMessageToDOM(payload.new, true);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'messages' },
+          (payload) => {
+            const id = payload?.old?.id;
+            if (id) {
+              const row = messagesList.querySelector(`[data-message-id="${id}"]`);
+              if (row) row.remove();
+              renderedMessageIds.delete(id);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            updateConnectionUI('connected', 'Live');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            realtimeStatusText.textContent = 'Reconnecting...';
+          }
+        });
+    }
+
+    /*************************************************************************
+     * 5. MESSAGE & ATTACHMENT DOM RENDERING
+     *************************************************************************/
+    async function downloadFileAttachment(fileUrl, fileName) {
+      try {
+        showToast(`Downloading ${fileName || 'file'}...`, 'info');
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName || 'download';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      } catch (err) {
+        // Fallback to opening in new tab if CORS/blob fetch fails
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
+
+    function createAttachmentElement(msg, isOwnMessage) {
+      const fileUrl = msg.file_url;
+      if (!fileUrl) return null;
+
+      const fileName = msg.file_name || 'Shared File';
+      const fileSize = formatBytes(msg.file_size);
+      const category = detectFileCategory(fileName, msg.file_type);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'mt-2 overflow-hidden rounded-xl';
+
+      // 1. IMAGE PREVIEW
+      if (category === 'image') {
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'relative group rounded-xl overflow-hidden border border-black/10 bg-slate-900/5 max-w-xs sm:max-w-sm';
+
+        const img = document.createElement('img');
+        img.src = fileUrl;
+        img.alt = fileName;
+        img.loading = 'lazy';
+        img.className = 'max-h-72 w-auto object-cover cursor-zoom-in transition duration-200 group-hover:scale-[1.01]';
+        img.addEventListener('click', () => openLightbox(fileUrl, fileName));
+
+        const overlayBar = document.createElement('div');
+        overlayBar.className = `flex items-center justify-between gap-2 px-3 py-2 text-xs ${
+          isOwnMessage ? 'bg-indigo-700/90 text-indigo-100' : 'bg-slate-100 text-slate-700'
+        }`;
+
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'truncate font-medium';
+        metaSpan.textContent = `${fileName}${fileSize ? ` (${fileSize})` : ''}`;
+
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.title = 'Download image';
+        dlBtn.className = `shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md font-semibold transition ${
+          isOwnMessage ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-white hover:bg-slate-200 text-slate-800 shadow-2xs'
+        }`;
+        dlBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+          </svg>
+          <span>Save</span>
+        `;
+        dlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          downloadFileAttachment(fileUrl, fileName);
+        });
+
+        overlayBar.appendChild(metaSpan);
+        overlayBar.appendChild(dlBtn);
+        imgContainer.appendChild(img);
+        imgContainer.appendChild(overlayBar);
+        wrapper.appendChild(imgContainer);
+        return wrapper;
+      }
+
+      // 2. AUDIO PLAYBACK
+      if (category === 'audio') {
+        const audioCard = document.createElement('div');
+        audioCard.className = `p-3 rounded-xl border ${
+          isOwnMessage
+            ? 'bg-indigo-700/70 border-indigo-500/50 text-white'
+            : 'bg-slate-50 border-slate-200/90 text-slate-800'
+        } space-y-2 min-w-[250px] sm:min-w-[300px]`;
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between gap-2';
+
+        const titleInfo = document.createElement('div');
+        titleInfo.className = 'min-w-0 flex items-center gap-2';
+        titleInfo.innerHTML = `
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+            isOwnMessage ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
+          }">AUDIO</span>
+        `;
+        const nameEl = document.createElement('span');
+        nameEl.className = 'text-xs font-semibold truncate';
+        nameEl.textContent = fileName;
+        titleInfo.appendChild(nameEl);
+
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className = `shrink-0 p-1.5 rounded-lg transition ${
+          isOwnMessage ? 'hover:bg-white/15 text-indigo-100' : 'hover:bg-slate-200 text-slate-600'
+        }`;
+        dlBtn.title = 'Download audio';
+        dlBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+          </svg>
+        `;
+        dlBtn.addEventListener('click', () => downloadFileAttachment(fileUrl, fileName));
+
+        topRow.appendChild(titleInfo);
+        topRow.appendChild(dlBtn);
+
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.preload = 'metadata';
+        audio.src = fileUrl;
+        audio.className = 'w-full h-9';
+
+        audioCard.appendChild(topRow);
+        audioCard.appendChild(audio);
+        if (fileSize) {
+          const sizeNote = document.createElement('div');
+          sizeNote.className = `text-[10px] font-mono ${isOwnMessage ? 'text-indigo-200' : 'text-slate-400'}`;
+          sizeNote.textContent = fileSize;
+          audioCard.appendChild(sizeNote);
+        }
+
+        wrapper.appendChild(audioCard);
+        return wrapper;
+      }
+
+      // 3. VIDEO PLAYBACK
+      if (category === 'video') {
+        const videoCard = document.createElement('div');
+        videoCard.className = `rounded-xl overflow-hidden border ${
+          isOwnMessage ? 'border-indigo-500/40 bg-indigo-950/40' : 'border-slate-200 bg-slate-900'
+        } max-w-xs sm:max-w-md`;
+
+        const video = document.createElement('video');
+        video.controls = true;
+        video.preload = 'metadata';
+        video.playsInline = true;
+        video.src = fileUrl;
+        video.className = 'w-full max-h-72 bg-black';
+
+        const footerBar = document.createElement('div');
+        footerBar.className = `flex items-center justify-between gap-2 px-3 py-2 text-xs ${
+          isOwnMessage ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-700'
+        }`;
+
+        const infoSpan = document.createElement('span');
+        infoSpan.className = 'truncate font-medium';
+        infoSpan.textContent = `${fileName}${fileSize ? ` (${fileSize})` : ''}`;
+
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className = `shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition ${
+          isOwnMessage ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-white hover:bg-slate-200 text-slate-800 shadow-2xs'
+        }`;
+        dlBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+          </svg>
+          <span>Download</span>
+        `;
+        dlBtn.addEventListener('click', () => downloadFileAttachment(fileUrl, fileName));
+
+        footerBar.appendChild(infoSpan);
+        footerBar.appendChild(dlBtn);
+
+        videoCard.appendChild(video);
+        videoCard.appendChild(footerBar);
+        wrapper.appendChild(videoCard);
+        return wrapper;
+      }
+
+      // 4. DOCUMENT / ARCHIVE / OTHER FILE CARD (PDF, DOCX, XLSX, PPTX, ZIP, TXT, CSV, etc.)
+      const badge = getFileBadgeMeta(category, fileName);
+      const docCard = document.createElement('div');
+      docCard.className = `p-3 rounded-xl border flex items-center justify-between gap-3 min-w-[240px] sm:min-w-[290px] ${
+        isOwnMessage
+          ? 'bg-indigo-700/75 border-indigo-500/50 text-white'
+          : 'bg-slate-50 border-slate-200/90 text-slate-800'
+      }`;
+
+      const leftPart = document.createElement('div');
+      leftPart.className = 'flex items-center gap-3 min-w-0';
+
+      const iconBox = document.createElement('div');
+      iconBox.className = `w-10 h-10 rounded-xl border flex items-center justify-center font-mono font-bold text-[11px] shrink-0 ${badge.bg}`;
+      iconBox.textContent = badge.label;
+
+      const textMeta = document.createElement('div');
+      textMeta.className = 'min-w-0';
+
+      const fNameEl = document.createElement('p');
+      fNameEl.className = 'text-xs sm:text-sm font-semibold truncate';
+      fNameEl.textContent = fileName;
+
+      const fSizeEl = document.createElement('p');
+      fSizeEl.className = `text-[11px] font-mono ${isOwnMessage ? 'text-indigo-200' : 'text-slate-500'}`;
+      fSizeEl.textContent = fileSize || 'Document';
+
+      textMeta.appendChild(fNameEl);
+      textMeta.appendChild(fSizeEl);
+      leftPart.appendChild(iconBox);
+      leftPart.appendChild(textMeta);
+
+      const dlButton = document.createElement('button');
+      dlButton.type = 'button';
+      dlButton.title = `Download ${fileName}`;
+      dlButton.className = `shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+        isOwnMessage
+          ? 'bg-white text-indigo-700 hover:bg-indigo-50 shadow-xs'
+          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs'
+      }`;
+      dlButton.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+        </svg>
+        <span>Download</span>
+      `;
+      dlButton.addEventListener('click', () => downloadFileAttachment(fileUrl, fileName));
+
+      docCard.appendChild(leftPart);
+      docCard.appendChild(dlButton);
+      wrapper.appendChild(docCard);
+      return wrapper;
+    }
+
+    function appendMessageToDOM(msg, animate = true) {
+      if (!msg || !msg.id) return;
+      if (renderedMessageIds.has(msg.id)) return;
+      renderedMessageIds.add(msg.id);
+
+      const emptyCard = document.getElementById('emptyStateCard');
+      if (emptyCard) emptyCard.remove();
+
+      const sender = msg.sender_name || 'Anonymous';
+      const isOwn = currentUserName && (msg.sender_id === currentUserName || sender.trim().toLowerCase() === currentUserName.trim().toLowerCase());
+
+      const row = document.createElement('div');
+      row.className = `flex items-end gap-2.5 ${isOwn ? 'justify-end' : 'justify-start'} ${animate ? 'animate-msg' : ''}`;
+      row.dataset.messageId = msg.id;
+
+      // Avatar for other participants
+      if (!isOwn) {
+        const avatar = document.createElement('div');
+        avatar.className = `w-8 h-8 rounded-full ${getAvatarColor(sender)} text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs select-none`;
+        avatar.textContent = getInitials(sender);
+        row.appendChild(avatar);
+      }
+
+      // Message Bubble Column
+      const col = document.createElement('div');
+      col.className = `flex flex-col max-w-[85%] sm:max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`;
+
+      // Sender Name + Timestamp Header
+      const metaHeader = document.createElement('div');
+      metaHeader.className = 'flex items-center gap-2 mb-1 px-1';
+
+      const senderSpan = document.createElement('span');
+      senderSpan.className = 'text-xs font-semibold text-slate-700';
+      senderSpan.textContent = isOwn ? 'You' : sender;
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'text-[11px] text-slate-400';
+      timeSpan.textContent = formatTimestamp(msg.created_at);
+
+      metaHeader.appendChild(senderSpan);
+      metaHeader.appendChild(timeSpan);
+      if (currentUserIsAdmin || msg.sender_id === currentUserName) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'message-delete-btn';
+        deleteBtn.setAttribute('aria-label', currentUserIsAdmin && !isOwn ? 'Admin: delete this message' : 'Delete your message');
+        deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>';
+        deleteBtn.title = currentUserIsAdmin && !isOwn ? 'Admin: delete this message' : 'Delete your message';
+        deleteBtn.addEventListener('click', () => deleteMessage(msg.id));
+        metaHeader.appendChild(deleteBtn);
+      }
+      col.appendChild(metaHeader);
+
+      // Bubble Container
+      const bubble = document.createElement('div');
+      bubble.className = isOwn
+        ? 'px-4 py-2.5 rounded-2xl rounded-br-xs bg-indigo-600 text-white shadow-sm shadow-indigo-600/15 break-words'
+        : 'px-4 py-2.5 rounded-2xl rounded-bl-xs bg-white text-slate-800 border border-slate-200/90 shadow-xs break-words';
+
+      // Message Text
+      if (msg.message_text && msg.message_text.trim().length > 0) {
+        const textP = document.createElement('p');
+        textP.className = 'text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap';
+        textP.textContent = msg.message_text;
+        bubble.appendChild(textP);
+      }
+
+      // Rich File Attachment
+      if (msg.file_url) {
+        const attachmentEl = createAttachmentElement(msg, isOwn);
+        if (attachmentEl) bubble.appendChild(attachmentEl);
+      }
+
+      col.appendChild(bubble);
+      row.appendChild(col);
+      messagesList.appendChild(row);
+
+      // Auto-scroll if user is near bottom or sent the message themselves
+      const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 180;
+      if (isOwn || isNearBottom || !animate) {
+        scrollToBottom(animate);
+      } else {
+        scrollToBottomBtn.classList.remove('hidden');
+      }
+    }
+
+    function scrollToBottom(smooth = true) {
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+      scrollToBottomBtn.classList.add('hidden');
+    }
+
+    /*************************************************************************
+     * 6. FILE SELECTION, UPLOAD WITH PROGRESS & MESSAGE SENDING
+     *************************************************************************/
+    function handleFileSelection(file) {
+      if (!file) return;
+
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        showToast(`File exceeds 50 MB limit (${formatBytes(file.size)}).`, 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      selectedFile = file;
+      selectedFileName.textContent = file.name;
+      selectedFileSize.textContent = formatBytes(file.size);
+      selectedFilePreview.classList.remove('hidden');
+
+      const category = detectFileCategory(file.name, file.type);
+      if (category === 'image') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          selectedFileThumb.innerHTML = `<img src="${e.target.result}" alt="Preview" class="w-full h-full object-cover" />`;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const badge = getFileBadgeMeta(category, file.name);
+        selectedFileThumb.className = `w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 font-mono font-bold text-xs ${badge.bg}`;
+        selectedFileThumb.textContent = badge.label;
+      }
+    }
+
+    function clearSelectedFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      selectedFilePreview.classList.add('hidden');
+      selectedFileThumb.innerHTML = 'FILE';
+    }
+
+    /**
+     * Uploads a file to Supabase Storage with real XHR upload progress tracking
+     * and returns the public download URL and storage path.
+     */
+    function uploadFileToSupabaseStorage(file, onProgress) {
+      return new Promise((resolve, reject) => {
+        // Sanitize file name while preserving extension
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const uniquePath = `uploads/${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanName}`;
+        const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${STORAGE_BUCKET}/${uniquePath}`;
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', endpoint, true);
+        xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
+        xhr.setRequestHeader('apikey', SUPABASE_KEY);
+        xhr.setRequestHeader('x-upsert', 'false');
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && typeof onProgress === 'function') {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(uniquePath);
+            resolve({
+              publicUrl: data.publicUrl,
+              storagePath: uniquePath
+            });
+          } else {
+            let errMsg = `Storage upload failed (HTTP ${xhr.status})`;
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              if (parsed.message || parsed.error) errMsg = parsed.message || parsed.error;
+            } catch (_) {}
+            reject(new Error(errMsg));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during file upload to Supabase Storage.'));
+        xhr.send(file);
+      });
+    }
+
+    async function handleSendMessage(e) {
+      if (e) e.preventDefault();
+      if (isUploadingOrSending) return;
+
+      const text = messageInput.value.trim();
+      if (!text && !selectedFile) {
+        return;
+      }
+
+      if (!supabaseClient) {
+        showToast('Connecting to chat server, please try again in a moment.', 'warning');
+        return;
+      }
+
+      isUploadingOrSending = true;
+      sendMessageBtn.disabled = true;
+      attachFileBtn.disabled = true;
+
+      let fileMetadata = {
+        file_name: null,
+        file_url: null,
+        storage_path: null,
+        file_type: null,
+        file_size: null
+      };
+
+      try {
+        // 1. If a file is attached, upload it to Supabase Storage first
+        if (selectedFile) {
+          uploadProgressWrapper.classList.remove('hidden');
+          uploadProgressBar.style.width = '0%';
+          uploadProgressPercent.textContent = '0%';
+          uploadProgressLabel.textContent = `Uploading ${selectedFile.name}...`;
+
+          const uploadResult = await uploadFileToSupabaseStorage(selectedFile, (pct) => {
+            uploadProgressBar.style.width = `${pct}%`;
+            uploadProgressPercent.textContent = `${pct}%`;
+          });
+
+          fileMetadata = {
+            file_name: selectedFile.name,
+            file_url: uploadResult.publicUrl,
+            storage_path: uploadResult.storagePath,
+            file_type: selectedFile.type || 'application/octet-stream',
+            file_size: selectedFile.size
+          };
+        }
+
+        // 2. Insert message record into Supabase PostgreSQL `public.messages`
+        const result = await gatewayRequest('send', { message_text: text || null, ...fileMetadata });
+        if (result.message) appendMessageToDOM(result.message, true);
+
+        // Reset composer
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        clearSelectedFile();
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        showToast(`Send failed: ${err.message}`, 'error');
+      } finally {
+        isUploadingOrSending = false;
+        sendMessageBtn.disabled = false;
+        attachFileBtn.disabled = false;
+        uploadProgressWrapper.classList.add('hidden');
+        messageInput.focus();
+      }
+    }
+
+    /*************************************************************************
+     * 7. SCREEN NAVIGATION & EVENT LISTENERS
+     *************************************************************************/
+    function enterChatRoom(name, isAdmin = false) {
+      const clean = String(name || '').trim();
+      if (!clean || !chatSessionToken) return;
+      currentUserName = clean;
+      currentUserIsAdmin = !!isAdmin;
+      sessionStorage.setItem('pulseroom_username', clean);
+      sessionStorage.setItem('pulseroom_is_admin', String(currentUserIsAdmin));
+
+      currentUserBadge.textContent = clean;
+      mobileNameLabel.textContent = clean;
+
+      if (creditsModal) creditsModal.classList.add('hidden');
+      welcomeScreen.classList.add('hidden');
+      chatScreen.classList.remove('hidden');
+
+      scrollToBottom(false);
+      historyLoaded = false;
+      loadMessagesHistory();
+      if (historyTimer) clearInterval(historyTimer);
+      historyTimer = setInterval(loadMessagesHistory, 3500);
+      refreshPresence();
+      if (presenceTimer) clearInterval(presenceTimer);
+      presenceTimer = setInterval(refreshPresence, 20000);
+      messageInput.focus();
+    }
+
+    async function returnToWelcomeScreen() {
+      chatScreen.classList.add('hidden');
+      welcomeScreen.classList.remove('hidden');
+      onlineUsersPanel.classList.add('hidden');
+      if (presenceTimer) clearInterval(presenceTimer);
+      if (historyTimer) clearInterval(historyTimer);
+      presenceTimer = null;
+      historyTimer = null;
+      historyLoaded = false;
+      try { if (chatSessionToken) await gatewayRequest('logout'); } catch (_) {}
+      chatSessionToken = '';
+      currentUserName = '';
+      currentUserIsAdmin = false;
+      sessionStorage.removeItem('pulseroom_session');
+      sessionStorage.removeItem('pulseroom_username');
+      sessionStorage.removeItem('pulseroom_is_admin');
+      senderNameInput.value = '';
+    }
+
+    function openCreditsModal() {
+      if (creditsModal) creditsModal.classList.remove('hidden');
+    }
+
+    function closeCreditsModal() {
+      if (creditsModal) creditsModal.classList.add('hidden');
+    }
+
+    function openLightbox(url, caption) {
+      lightboxImg.src = url;
+      lightboxCaption.textContent = caption || '';
+      lightboxDownloadBtn.href = url;
+      lightboxModal.classList.remove('hidden');
+    }
+
+    function closeLightbox() {
+      lightboxModal.classList.add('hidden');
+      lightboxImg.src = '';
+    }
+
+    async function deleteMessage(id) {
+      if (!window.confirm('Delete this message? This action cannot be undone.')) return;
+      try {
+        await gatewayRequest('delete', { id });
+        const row = messagesList.querySelector(`[data-message-id="${id}"]`);
+        if (row) row.remove();
+        renderedMessageIds.delete(id);
+        showToast('Message deleted.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Could not delete this message.', 'error');
+      }
+    }
+
+    // Event Listeners
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    const loginButtonLabel = document.getElementById('loginButtonLabel');
+    const loginButtonSpinner = document.getElementById('loginButtonSpinner');
+    const loginButtonArrow = document.getElementById('loginButtonArrow');
+    let isLoggingIn = false;
+    function setLoginLoading(loading) {
+      isLoggingIn = loading;
+      loginSubmitBtn.disabled = loading;
+      codeNumpad.querySelectorAll('button').forEach((button) => { button.disabled = loading; });
+      loginButtonSpinner.classList.toggle('hidden', !loading);
+      loginButtonArrow.classList.toggle('hidden', loading);
+      loginButtonLabel.textContent = loading ? 'Connecting…' : 'Unlock Chat';
+      loginSubmitBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+    }
+    nameEntryForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isLoggingIn) return;
+      const code = senderNameInput.value.trim();
+      if (!code) { showToast('Please enter your access code using the numpad.', 'warning'); return; }
+      setLoginLoading(true);
+      try {
+        const result = await gatewayRequest('login', { code });
+        chatSessionToken = result.token;
+        sessionStorage.setItem('pulseroom_session', chatSessionToken);
+        enterChatRoom(result.name, result.isAdmin);
+        senderNameInput.value = '';
+      } catch (err) {
+        showToast(err.message || 'Unable to sign in.', 'error');
+        senderNameInput.value = '';
+      } finally {
+        setLoginLoading(false);
+      }
+    });
+
+    codeNumpad.addEventListener('click', (e) => {
+      if (isLoggingIn) return;
+      const button = e.target.closest('button[data-key]');
+      if (!button) return;
+      const key = button.dataset.key;
+      if (key === 'clear') senderNameInput.value = '';
+      else if (key === 'back') senderNameInput.value = senderNameInput.value.slice(0, -1);
+      else if (senderNameInput.value.length < 4) senderNameInput.value += key;
+    });
+
+    changeNameBtn.addEventListener('click', () => returnToWelcomeScreen());
+    onlineUsersBtn.addEventListener('click', () => {
+      const opening = onlineUsersPanel.classList.contains('hidden');
+      onlineUsersPanel.classList.toggle('hidden');
+      onlineUsersBtn.setAttribute('aria-expanded', String(opening));
+      if (opening) refreshPresence();
+    });
+
+    refreshMessagesBtn.addEventListener('click', async () => {
+      if (!supabaseClient) return;
+      await loadMessagesHistory();
+      showToast('Chat history refreshed.', 'info');
+    });
+
+    // File Attachment Controls
+    attachFileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFileSelection(e.target.files[0]);
+      }
+    });
+    clearFileBtn.addEventListener('click', clearSelectedFile);
+
+    // Drag and Drop file support on Chat Screen
+    let dragCounter = 0;
+    window.addEventListener('dragenter', (e) => {
+      if (chatScreen.classList.contains('hidden')) return;
+      e.preventDefault();
+      dragCounter++;
+      dropZoneOverlay.classList.remove('hidden');
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      if (chatScreen.classList.contains('hidden')) return;
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dropZoneOverlay.classList.add('hidden');
+      }
+    });
+
+    window.addEventListener('dragover', (e) => {
+      if (chatScreen.classList.contains('hidden')) return;
+      e.preventDefault();
+    });
+
+    window.addEventListener('drop', (e) => {
+      if (chatScreen.classList.contains('hidden')) return;
+      e.preventDefault();
+      dragCounter = 0;
+      dropZoneOverlay.classList.add('hidden');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileSelection(e.dataTransfer.files[0]);
+      }
+    });
+
+    // Auto-resize message textarea & Enter key submission
+    messageInput.addEventListener('input', () => {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + 'px';
+    });
+
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage(e);
+      }
+    });
+
+    chatForm.addEventListener('submit', handleSendMessage);
+
+    // Scroll listener for floating scroll-to-bottom button
+    messagesContainer.addEventListener('scroll', () => {
+      const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+      if (distanceFromBottom > 220) {
+        scrollToBottomBtn.classList.remove('hidden');
+      } else {
+        scrollToBottomBtn.classList.add('hidden');
+      }
+    });
+
+    scrollToBottomBtn.addEventListener('click', () => scrollToBottom(true));
+
+    // Lightbox events
+    closeLightboxBtn.addEventListener('click', closeLightbox);
+    lightboxModal.addEventListener('click', (e) => {
+      if (e.target === lightboxModal) closeLightbox();
+    });
+
+    // Creator Credits Modal events
+    if (openCreditsBtn) {
+      openCreditsBtn.addEventListener('click', openCreditsModal);
+    }
+    if (closeCreditsIconBtn) {
+      closeCreditsIconBtn.addEventListener('click', closeCreditsModal);
+    }
+    if (closeCreditsBtn) {
+      closeCreditsBtn.addEventListener('click', closeCreditsModal);
+    }
+    if (creditsModal) {
+      creditsModal.addEventListener('click', (e) => {
+        if (e.target === creditsModal) closeCreditsModal();
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeLightbox();
+        closeCreditsModal();
+      }
+    });
+
+    // Initialize Application on Load
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initSupabaseClient();
+      if (chatSessionToken && currentUserName) {
+        try {
+          await gatewayRequest('heartbeat');
+          enterChatRoom(currentUserName, currentUserIsAdmin);
+        } catch (_) {
+          chatSessionToken = '';
+          currentUserName = '';
+          currentUserIsAdmin = false;
+          sessionStorage.removeItem('pulseroom_session');
+          sessionStorage.removeItem('pulseroom_username');
+          sessionStorage.removeItem('pulseroom_is_admin');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
